@@ -1,4 +1,4 @@
-// USDT Store - Enhanced Wallet Integration
+// USDT Store - TrustWallet Mobile & TronLink Support
 // TRC20 USDT Contract Address
 const USDT_CONTRACT = 'TH6dmHZ3iCrnceceGDYa4L8adUCDakLwpw';
 
@@ -19,7 +19,7 @@ let walletConnected = false;
 let userAddress = null;
 let tronWeb = null;
 let usdtContract = null;
-let walletType = null; // 'tronlink' or 'trustwallet'
+let walletType = null; // 'tronlink', 'trustwallet', or 'trustwallet-mobile'
 
 // DOM Elements
 const connectWalletBtn = document.getElementById('connectWallet');
@@ -84,7 +84,7 @@ window.addEventListener('load', async () => {
     setupEventListeners();
 });
 
-// Detect available wallet
+// Detect available wallet (TrustWallet or TronLink)
 async function detectWallet() {
     let attempts = 0;
     const maxAttempts = 5;
@@ -92,9 +92,28 @@ async function detectWallet() {
     const checkWallet = async () => {
         attempts++;
         
-        // Check for TronLink (Browser Extension)
-        if (window.tronLink) {
-            console.log('TronLink detected!');
+        // Check for TrustWallet Mobile (DApp Browser)
+        // TrustWallet mobile injects tronWeb directly when browsing TRON dApps
+        if (isTrustWalletMobile()) {
+            console.log('✅ TrustWallet Mobile detected!');
+            walletType = 'trustwallet-mobile';
+            
+            // Wait a bit for tronWeb to be injected
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            if (window.tronWeb && window.tronWeb.ready) {
+                tronWeb = window.tronWeb;
+                showToast('✅ TrustWallet detected and ready! Click "Connect Wallet" to continue.', 'success');
+                return true;
+            } else if (window.tronWeb) {
+                showToast('📱 TrustWallet detected! Click "Connect Wallet" to continue.', 'success');
+                return true;
+            }
+        }
+        
+        // Check for TronLink (Browser Extension or Mobile)
+        if (window.tronLink || window.tronWeb) {
+            console.log('✅ TronLink detected!');
             walletType = 'tronlink';
             
             // Check if TronLink is ready (unlocked)
@@ -107,14 +126,6 @@ async function detectWallet() {
                 showToast('🔒 TronLink detected but locked. Please unlock your wallet and click "Connect Wallet".', 'warning');
                 return true;
             }
-        }
-        
-        // Check for TrustWallet (Mobile DApp Browser)
-        if (window.ethereum && window.ethereum.isTrust) {
-            console.log('TrustWallet detected!');
-            walletType = 'trustwallet';
-            showToast('✅ TrustWallet detected! Click "Connect Wallet" to continue.', 'success');
-            return true;
         }
         
         // Continue checking for a few seconds
@@ -131,6 +142,17 @@ async function detectWallet() {
     await checkWallet();
 }
 
+// Check if TrustWallet Mobile
+function isTrustWalletMobile() {
+    // TrustWallet mobile can be detected by checking user agent and injected objects
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    const isTrustUA = /Trust/i.test(userAgent);
+    const hasTrustWallet = window.trustwallet !== undefined;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    
+    return (isTrustUA || hasTrustWallet) && isMobile;
+}
+
 // Setup Event Listeners
 function setupEventListeners() {
     connectWalletBtn.addEventListener('click', connectWallet);
@@ -138,18 +160,10 @@ function setupEventListeners() {
     copyContractBtn.addEventListener('click', () => copyToClipboard(USDT_CONTRACT, 'Contract address copied!'));
     sendForm.addEventListener('submit', handleSendTransaction);
 
-    // Listen for TronLink account changes
+    // Listen for account changes
     window.addEventListener('message', (e) => {
-        if (e.data.message && e.data.message.action === 'setAccount') {
-            console.log('TronLink account changed');
-            if (walletConnected) {
-                showToast('Wallet account changed. Reconnecting...', 'info');
-                setTimeout(() => location.reload(), 1500);
-            }
-        }
-        
-        if (e.data.message && e.data.message.action === 'accountsChanged') {
-            console.log('Accounts changed');
+        if (e.data.message && (e.data.message.action === 'setAccount' || e.data.message.action === 'accountsChanged')) {
+            console.log('Wallet account changed');
             if (walletConnected) {
                 showToast('Wallet account changed. Reconnecting...', 'info');
                 setTimeout(() => location.reload(), 1500);
@@ -158,23 +172,30 @@ function setupEventListeners() {
     });
 }
 
-// Connect Wallet Function (Enhanced)
+// Connect Wallet Function (Universal for TrustWallet & TronLink)
 async function connectWallet() {
     try {
         showLoading(true);
         
-        // TronLink Connection
-        if (window.tronLink || window.tronWeb) {
+        // TrustWallet Mobile (uses injected tronWeb directly)
+        if (walletType === 'trustwallet-mobile') {
+            await connectTrustWallet();
+        }
+        // TronLink (Browser Extension or Mobile)
+        else if (walletType === 'tronlink') {
             await connectTronLink();
         }
-        // TrustWallet or other Web3 wallets
-        else if (window.ethereum) {
-            showToast('Please use TronLink for TRON network', 'error');
-            window.open('https://www.tronlink.org/', '_blank');
-        }
-        // No wallet detected
+        // Fallback: Try to detect what's available
         else {
-            throw new Error('No wallet detected. Please install TronLink extension or use TronLink mobile app.');
+            if (isTrustWalletMobile() && window.tronWeb) {
+                walletType = 'trustwallet-mobile';
+                await connectTrustWallet();
+            } else if (window.tronLink || window.tronWeb) {
+                walletType = 'tronlink';
+                await connectTronLink();
+            } else {
+                throw new Error('No TRON wallet detected. Please use TrustWallet mobile app or install TronLink.');
+            }
         }
 
     } catch (error) {
@@ -185,12 +206,70 @@ async function connectWallet() {
     }
 }
 
+// Connect TrustWallet Mobile
+async function connectTrustWallet() {
+    try {
+        console.log('📱 Connecting TrustWallet Mobile...');
+        
+        // TrustWallet mobile injects tronWeb directly
+        if (!window.tronWeb) {
+            throw new Error('TronWeb not found. Please make sure you are using TrustWallet mobile app DApp browser.');
+        }
+
+        // Wait for tronWeb to be ready
+        let readyAttempts = 0;
+        while (!window.tronWeb.ready && readyAttempts < 10) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            readyAttempts++;
+        }
+
+        if (!window.tronWeb.ready) {
+            throw new Error('Please unlock your TrustWallet and try again.');
+        }
+
+        tronWeb = window.tronWeb;
+        
+        // Get user address
+        userAddress = tronWeb.defaultAddress.base58;
+        
+        if (!userAddress || userAddress === 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb') {
+            throw new Error('No wallet address found. Please unlock TrustWallet and try again.');
+        }
+
+        console.log('✅ TrustWallet connected:', userAddress);
+
+        // Initialize USDT contract
+        await initializeContract();
+
+        // Auto-import USDT token
+        await autoImportToken();
+
+        // Update UI
+        walletConnected = true;
+        updateWalletUI('TrustWallet');
+        
+        // Fetch balances
+        await updateBalances();
+
+        showToast('✅ TrustWallet connected! USDT token imported.', 'success');
+        
+        // Hide instructions, show transaction form
+        instructionsCard.style.display = 'none';
+        transactionForm.style.display = 'block';
+
+    } catch (error) {
+        throw error;
+    }
+}
+
 // Connect TronLink Wallet
 async function connectTronLink() {
     try {
+        console.log('🔗 Connecting TronLink...');
+        
         // Check if TronLink exists
         if (!window.tronLink && !window.tronWeb) {
-            throw new Error('TronLink not found. Please install TronLink extension.');
+            throw new Error('TronLink not found. Please install TronLink extension or use TrustWallet mobile app.');
         }
 
         // Wait for TronLink to be ready
@@ -198,22 +277,24 @@ async function connectTronLink() {
             // Request account access - this will prompt user to unlock
             showToast('🔓 Please unlock TronLink and approve the connection...', 'info');
             
-            const res = await window.tronLink.request({ 
-                method: 'tron_requestAccounts' 
-            });
-            
-            if (res.code === 200) {
-                // Wait a moment for TronWeb to initialize
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            if (window.tronLink) {
+                const res = await window.tronLink.request({ 
+                    method: 'tron_requestAccounts' 
+                });
                 
-                // Check again
-                if (!window.tronWeb || !window.tronWeb.ready) {
-                    throw new Error('Please unlock TronLink wallet and try again.');
+                if (res.code === 200) {
+                    // Wait a moment for TronWeb to initialize
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Check again
+                    if (!window.tronWeb || !window.tronWeb.ready) {
+                        throw new Error('Please unlock TronLink wallet and try again.');
+                    }
+                } else if (res.code === 4001) {
+                    throw new Error('Connection request rejected. Please approve the connection in TronLink.');
+                } else {
+                    throw new Error('Failed to connect. Please make sure TronLink is unlocked.');
                 }
-            } else if (res.code === 4001) {
-                throw new Error('Connection request rejected. Please approve the connection in TronLink.');
-            } else {
-                throw new Error('Failed to connect. Please make sure TronLink is unlocked.');
             }
         }
 
@@ -231,22 +312,22 @@ async function connectTronLink() {
             throw new Error('No wallet address found. Please unlock TronLink and try again.');
         }
 
-        console.log('✅ Connected to wallet:', userAddress);
+        console.log('✅ TronLink connected:', userAddress);
 
         // Initialize USDT contract
         await initializeContract();
 
-        // Auto-import USDT token to wallet
+        // Auto-import USDT token
         await autoImportToken();
 
         // Update UI
         walletConnected = true;
-        updateWalletUI();
+        updateWalletUI('TronLink');
         
         // Fetch balances
         await updateBalances();
 
-        showToast('✅ Wallet connected successfully! USDT token imported.', 'success');
+        showToast('✅ TronLink connected! USDT token imported.', 'success');
         
         // Hide instructions, show transaction form
         instructionsCard.style.display = 'none';
@@ -260,11 +341,10 @@ async function connectTronLink() {
 // Auto-import USDT Token to Wallet
 async function autoImportToken() {
     try {
-        // TronLink supports adding custom tokens
-        if (window.tronLink) {
-            console.log('Attempting to auto-import USDT token...');
-            
-            // Try to add token using TronLink's method
+        console.log('🪙 Attempting to auto-import USDT token...');
+        
+        // For TronLink - use wallet_watchAsset
+        if (walletType === 'tronlink' && window.tronLink) {
             try {
                 const result = await window.tronLink.request({
                     method: 'wallet_watchAsset',
@@ -280,14 +360,21 @@ async function autoImportToken() {
                 });
                 
                 if (result) {
-                    console.log('✅ USDT token auto-imported to wallet');
-                    showToast('✅ USDT token imported to your wallet!', 'success');
+                    console.log('✅ USDT token imported via TronLink');
+                    showToast('✅ USDT token added to your wallet!', 'success');
                 }
             } catch (tokenError) {
-                // Token might already be added or method not supported
-                console.log('Token auto-import:', tokenError.message || 'Token may already exist in wallet');
+                console.log('Token auto-import (TronLink):', tokenError.message || 'Token may already exist');
             }
         }
+        
+        // For TrustWallet Mobile - token should be visible automatically
+        // TrustWallet shows all TRC20 tokens by default when they have balance
+        if (walletType === 'trustwallet-mobile') {
+            console.log('✅ USDT token will appear in TrustWallet when you receive tokens');
+            showToast('✅ Ready to use USDT! Token will appear when you have balance.', 'success');
+        }
+        
     } catch (error) {
         // Non-critical error, just log it
         console.log('Auto-import note:', error.message);
@@ -297,22 +384,16 @@ async function autoImportToken() {
 // Handle Connection Errors
 function handleConnectionError(error) {
     let errorMessage = error.message || 'Failed to connect wallet';
-    let actionButton = null;
     
     if (errorMessage.includes('not found') || errorMessage.includes('install')) {
-        errorMessage = '❌ TronLink not detected. Please install TronLink extension.';
-        actionButton = () => window.open('https://www.tronlink.org/', '_blank');
+        errorMessage = '❌ No wallet detected. Please use TrustWallet mobile app or install TronLink extension.';
     } else if (errorMessage.includes('unlock') || errorMessage.includes('locked')) {
-        errorMessage = '🔒 Please unlock your TronLink wallet and try again.';
+        errorMessage = '🔒 Please unlock your wallet and try again.';
     } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
-        errorMessage = '❌ Connection rejected. Please approve the connection in TronLink.';
+        errorMessage = '❌ Connection rejected. Please approve the connection in your wallet.';
     }
     
     showToast(errorMessage, 'error');
-    
-    if (actionButton) {
-        setTimeout(actionButton, 2000);
-    }
 }
 
 // Initialize USDT Contract
@@ -327,7 +408,7 @@ async function initializeContract() {
 }
 
 // Update Wallet UI
-function updateWalletUI() {
+function updateWalletUI(walletName = 'Wallet') {
     walletInfo.style.display = 'block';
     walletAddressEl.textContent = formatAddress(userAddress);
     connectWalletBtn.innerHTML = `
@@ -335,7 +416,7 @@ function updateWalletUI() {
             <circle cx="10" cy="10" r="8" fill="#4CAF50"/>
             <path d="M6 10L9 13L14 8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Connected
+        Connected (${walletName})
     `;
     connectWalletBtn.style.background = '#28a745';
     connectWalletBtn.disabled = true;
@@ -355,7 +436,7 @@ async function updateBalances() {
         usdtBalanceEl.textContent = usdtAmount.toFixed(2);
         availableBalanceEl.textContent = usdtAmount.toFixed(2);
 
-        console.log('Balances updated:', { trx: trxAmount, usdt: usdtAmount });
+        console.log('💰 Balances updated:', { trx: trxAmount, usdt: usdtAmount });
     } catch (error) {
         console.error('Balance update error:', error);
         showToast('⚠️ Failed to fetch balances. Retrying...', 'warning');
@@ -408,7 +489,7 @@ async function handleSendTransaction(e) {
         // Convert amount to contract format (6 decimals for USDT)
         const amountInSun = Math.floor(parseFloat(amount) * 1000000);
 
-        console.log('Sending transaction:', {
+        console.log('💸 Sending transaction:', {
             from: userAddress,
             to: recipientAddress,
             amount: amount,
@@ -450,7 +531,7 @@ async function handleSendTransaction(e) {
             } else if (error.message.includes('Confirmation') || error.message.includes('cancel')) {
                 errorMessage = '❌ Transaction cancelled by user';
             } else if (error.message.includes('denied')) {
-                errorMessage = '❌ Transaction rejected in TronLink';
+                errorMessage = '❌ Transaction rejected in wallet';
             } else {
                 errorMessage = `❌ ${error.message}`;
             }
@@ -493,7 +574,7 @@ function showToast(message, type = 'info') {
     
     setTimeout(() => {
         toast.classList.remove('show');
-    }, 4000); // Increased to 4 seconds for better readability
+    }, 4000);
 }
 
 function showLoading(show) {
@@ -524,10 +605,13 @@ window.usdtStore = {
     refresh: updateBalances,
     reconnect: connectWallet,
     contractAddress: USDT_CONTRACT,
-    walletType: () => walletType
+    walletType: () => walletType,
+    isTrustWallet: () => walletType === 'trustwallet-mobile'
 };
 
 console.log('🚀 USDT Store initialized');
-console.log('📝 Contract Address:', USDT_CONTRACT);
+console.log('📝 Contract: TH6dmHZ3iCrnceceGDYa4L8adUCDakLwpw');
 console.log('🌐 Network: TRON Mainnet (TRC20)');
-console.log('💡 Debug commands: usdtStore.getAddress(), usdtStore.getBalance(), usdtStore.refresh()');
+console.log('📱 Supports: TrustWallet Mobile + TronLink');
+console.log('💡 Debug: usdtStore.walletType()');
+
