@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USDT Store - TRC20 Tether Store</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="20" cy="20" r="20" fill="#26A17B"/>
+                    <path d="M22.5 11.5H17.5V16.5H12.5V21.5H17.5V28.5H22.5V21.5H27.5V16.5H22.5V11.5Z" fill="white"/>
+                </svg>
+                <h1>USDT Store</h1>
+            </div>
+            <button id="connectWallet" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.5 6.25H13.75V5C13.75 3.96875 12.9062 3.125 11.875 3.125H8.125C7.09375 3.125 6.25 3.96875 6.25 5V6.25H2.5C1.46875 6.25 0.625 7.09375 0.625 8.125V15C0.625 16.0312 1.46875 16.875 2.5 16.875H17.5C18.5312 16.875 19.375 16.0312 19.375 15V8.125C19.375 7.09375 18.5312 6.25 17.5 6.25ZM7.5 5C7.5 4.65625 7.78125 4.375 8.125 4.375H11.875C12.2188 4.375 12.5 4.65625 12.5 5V6.25H7.5V5Z" fill="white"/>
+                </svg>
+                Connect Wallet
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Wallet Info Card -->
+            <div class="card wallet-card" id="walletInfo" style="display: none;">
+                <div class="card-header">
+                    <h2>Wallet Connected</h2>
+                    <span class="status-badge connected">Connected</span>
+                </div>
+                <div class="wallet-details">
+                    <div class="detail-item">
+                        <span class="label">Wallet Address</span>
+                        <div class="address-container">
+                            <span id="walletAddress" class="address">-</span>
+                            <button class="btn-icon" id="copyAddress" title="Copy Address">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M13.5 5.5H6.5C5.94772 5.5 5.5 5.94772 5.5 6.5V13.5C5.5 14.0523 5.94772 14.5 6.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V6.5C14.5 5.94772 14.0523 5.5 13.5 5.5Z" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M3.5 10.5H2.5C2.23478 10.5 1.98043 10.3946 1.79289 10.2071C1.60536 10.0196 1.5 9.76522 1.5 9.5V2.5C1.5 2.23478 1.60536 1.98043 1.79289 1.79289C1.98043 1.60536 2.23478 1.5 2.5 1.5H9.5C9.76522 1.5 10.0196 1.60536 10.2071 1.79289C10.3946 1.98043 10.5 2.23478 10.5 2.5V3.5" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="balance-container">
+                        <div class="balance-item">
+                            <span class="label">USDT Balance</span>
+                            <div class="balance">
+                                <span id="usdtBalance" class="amount">0.00</span>
+                                <span class="currency">USDT</span>
+                            </div>
+                        </div>
+                        <div class="balance-item">
+                            <span class="label">TRX Balance</span>
+                            <div class="balance">
+                                <span id="trxBalance" class="amount">0.00</span>
+                                <span class="currency">TRX</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Info Card -->
+            <div class="card token-card">
+                <div class="card-header">
+                    <h2>Token Information</h2>
+                    <span class="network-badge">TRC20</span>
+                </div>
+                <div class="token-details">
+                    <div class="token-icon">
+                        <img src="https://cryptologos.cc/logos/tether-usdt-logo.png" alt="USDT" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%2326A17B%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2240%22 fill=%22white%22 font-family=%22Arial%22%3EUSDT%3C/text%3E%3C/svg%3E'">
+                    </div>
+                    <div class="token-info">
+                        <h3>Tether USD</h3>
+                        <p class="token-symbol">USDT</p>
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Contract Address</span>
+                    <div class="address-container">
+                        <span class="address contract-address">TH6dmHZ3iCrnceceGDYa4L8adUCDakLwpw</span>
+                        <button class="btn-icon" id="copyContract" title="Copy Contract">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M13.5 5.5H6.5C5.94772 5.5 5.5 5.94772 5.5 6.5V13.5C5.5 14.0523 5.94772 14.5 6.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V6.5C14.5 5.94772 14.0523 5.5 13.5 5.5Z" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M3.5 10.5H2.5C2.23478 10.5 1.98043 10.3946 1.79289 10.2071C1.60536 10.0196 1.5 9.76522 1.5 9.5V2.5C1.5 2.23478 1.60536 1.98043 1.79289 1.79289C1.98043 1.60536 2.23478 1.5 2.5 1.5H9.5C9.76522 1.5 10.0196 1.60536 10.2071 1.79289C10.3946 1.98043 10.5 2.23478 10.5 2.5V3.5" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Network</span>
+                    <span class="value">TRON (TRC20)</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Decimals</span>
+                    <span class="value">6</span>
+                </div>
+            </div>
+
+            <!-- Transaction Form -->
+            <div class="card transaction-card" id="transactionForm" style="display: none;">
+                <div class="card-header">
+                    <h2>Send USDT</h2>
+                </div>
+                <form id="sendForm">
+                    <div class="form-group">
+                        <label for="recipientAddress">Recipient Address</label>
+                        <input type="text" id="recipientAddress" placeholder="Enter TRC20 Address (T...)" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="amount">Amount</label>
+                        <div class="input-group">
+                            <input type="number" id="amount" placeholder="0.00" step="0.000001" min="0" required>
+                            <span class="input-addon">USDT</span>
+                        </div>
+                        <span class="helper-text">Available: <span id="availableBalance">0.00</span> USDT</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M17.5 10L2.5 10M17.5 10L12.5 5M17.5 10L12.5 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Send USDT
+                    </button>
+                </form>
+            </div>
+
+            <!-- Instructions Card -->
+            <div class="card info-card" id="instructionsCard">
+                <div class="card-header">
+                    <h2>How to Get Started</h2>
+                </div>
+                <div class="instructions">
+                    <div class="instruction-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Install TronLink Wallet</h3>
+                            <p>Download and install TronLink wallet extension for your browser or use the mobile app</p>
+                        </div>
+                    </div>
+                    <div class="instruction-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Connect Your Wallet</h3>
+                            <p>Click the "Connect Wallet" button and approve the connection in TronLink</p>
+                        </div>
+                    </div>
+                    <div class="instruction-item">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Manage Your USDT</h3>
+                            <p>View your balance and send USDT to other TRC20 addresses</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 USDT Store. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="#" class="footer-link">Terms</a>
+                <a href="#" class="footer-link">Privacy</a>
+                <a href="#" class="footer-link">Support</a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Processing transaction...</p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
