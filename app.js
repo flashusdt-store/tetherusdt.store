@@ -74,10 +74,10 @@ window.addEventListener('load', async () => {
     setupEventListeners();
 });
 
-// Simple, robust wallet detection
+// TronLink-focused wallet detection
 async function detectWallet() {
     let attempts = 0;
-    const maxAttempts = 10; // Increased to 10 seconds
+    const maxAttempts = 10;
     
     const checkWallet = async () => {
         attempts++;
@@ -86,36 +86,17 @@ async function detectWallet() {
         // Debug: Log what's available
         console.log('window.tronWeb:', !!window.tronWeb);
         console.log('window.tronLink:', !!window.tronLink);
-        console.log('window.trustwallet:', !!window.trustwallet);
         
-        // Simple check: Do we have tronWeb?
-        if (window.tronWeb) {
-            console.log('✅ tronWeb found!');
-            
-            // Determine wallet type
-            const userAgent = navigator.userAgent || '';
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-            const isTrustUA = /Trust/i.test(userAgent);
-            
-            if (isTrustUA || window.trustwallet) {
-                walletType = 'TrustWallet';
-                console.log('📱 TrustWallet detected');
-            } else if (window.tronLink) {
-                walletType = 'TronLink';
-                console.log('🔗 TronLink detected');
-            } else if (isMobile) {
-                walletType = 'Mobile Wallet';
-                console.log('📱 Mobile wallet detected');
-            } else {
-                walletType = 'TRON Wallet';
-                console.log('💼 TRON wallet detected');
-            }
+        // Check for TronLink specifically
+        if (window.tronWeb && window.tronLink) {
+            console.log('✅ TronLink detected!');
+            walletType = 'TronLink';
             
             // Check if ready
             if (window.tronWeb.ready) {
-                showToast(`✅ ${walletType} detected and ready! Click "Connect Wallet".`, 'success');
+                showToast('✅ TronLink detected and ready! Click "Connect Wallet".', 'success');
             } else {
-                showToast(`📱 ${walletType} detected! Click "Connect Wallet".`, 'success');
+                showToast('🔗 TronLink detected! Please unlock your wallet and click "Connect Wallet".', 'warning');
             }
             
             return true;
@@ -125,8 +106,8 @@ async function detectWallet() {
         if (attempts < maxAttempts) {
             setTimeout(checkWallet, 1000);
         } else {
-            console.log('❌ No wallet detected after 10 seconds');
-            showToast('⚠️ No TRON wallet detected. Please use TrustWallet mobile app or install TronLink.', 'warning');
+            console.log('❌ TronLink not detected');
+            showToast('⚠️ TronLink not detected. Please install TronLink extension.', 'warning');
         }
         
         return false;
@@ -154,68 +135,59 @@ function setupEventListeners() {
     });
 }
 
-// Universal Connect Wallet (works with any TRON wallet)
+// TronLink Connect Wallet Function
 async function connectWallet() {
     try {
         showLoading(true);
-        console.log('🔗 Starting connection...');
+        console.log('🔗 Starting TronLink connection...');
         
-        // Check if tronWeb exists
-        if (!window.tronWeb) {
-            throw new Error('No TRON wallet found. Please use TrustWallet or install TronLink extension.');
+        // Check if TronLink exists
+        if (!window.tronWeb || !window.tronLink) {
+            throw new Error('TronLink not detected. Please install TronLink extension.');
         }
 
         tronWeb = window.tronWeb;
         
-        // Try to get address immediately (TrustWallet might already have it)
-        if (tronWeb.defaultAddress && tronWeb.defaultAddress.base58) {
-            userAddress = tronWeb.defaultAddress.base58;
-            console.log('✅ Address found immediately:', userAddress);
-        } else {
-            console.log('⏳ Address not available yet, trying to request access...');
-            
-            // Try TronLink's request method if available
-            if (window.tronLink && window.tronLink.request) {
-                console.log('🔓 Requesting TronLink access...');
-                try {
-                    const res = await window.tronLink.request({ 
-                        method: 'tron_requestAccounts' 
-                    });
-                    
-                    if (res.code === 200) {
-                        console.log('✅ TronLink access granted');
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    } else if (res.code === 4001) {
-                        throw new Error('Connection rejected. Please approve the connection.');
-                    }
-                } catch (e) {
-                    console.log('TronLink request note:', e.message);
-                }
-            }
-            
-            // Wait a bit and try to get address again
-            let attempts = 0;
-            while (attempts < 10) {
-                await new Promise(resolve => setTimeout(resolve, 300));
+        // Wait for TronLink to be ready
+        let readyAttempts = 0;
+        while (!tronWeb.ready && readyAttempts < 10) {
+            console.log(`⏳ Waiting for TronLink to be ready... attempt ${readyAttempts + 1}`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            readyAttempts++;
+        }
+        
+        if (!tronWeb.ready) {
+            throw new Error('TronLink is not ready. Please unlock your wallet.');
+        }
+        
+        // Request access if needed
+        if (!tronWeb.defaultAddress || !tronWeb.defaultAddress.base58) {
+            console.log('🔓 Requesting TronLink access...');
+            try {
+                const res = await window.tronLink.request({ 
+                    method: 'tron_requestAccounts' 
+                });
                 
-                if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
-                    tronWeb = window.tronWeb;
-                    userAddress = tronWeb.defaultAddress.base58;
-                    console.log(`✅ Address found on attempt ${attempts + 1}:`, userAddress);
-                    break;
+                if (res.code === 200) {
+                    console.log('✅ TronLink access granted');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } else if (res.code === 4001) {
+                    throw new Error('Connection rejected. Please approve the connection.');
                 }
-                
-                console.log(`⏳ Attempt ${attempts + 1}/10: Waiting for address...`);
-                attempts++;
+            } catch (e) {
+                throw new Error('Failed to request access. Please approve in TronLink.');
             }
         }
         
-        // Final check
-        if (!userAddress || userAddress === 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb') {
-            throw new Error('Could not get wallet address. Please make sure your wallet is connected and unlocked.');
+        // Get wallet address
+        const address = tronWeb.defaultAddress.base58;
+        if (!address || address === 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb') {
+            throw new Error('Could not get wallet address. Please make sure TronLink is unlocked.');
         }
-
-        console.log('✅ Connected to address:', userAddress);
+        
+        userAddress = address;
+        walletType = 'TronLink';
+        console.log('✅ Connected to TronLink:', userAddress);
 
         // Initialize USDT contract
         await initializeContract();
@@ -227,10 +199,10 @@ async function connectWallet() {
         // Fetch balances
         await updateBalances();
 
-        // Try to add USDT token to wallet
+        // Auto-import USDT token
         await addUSDTToWallet();
 
-        showToast(`✅ ${walletType} connected successfully!`, 'success');
+        showToast('✅ TronLink connected successfully!', 'success');
         
         // Hide instructions, show transaction form
         instructionsCard.style.display = 'none';
@@ -244,18 +216,18 @@ async function connectWallet() {
     }
 }
 
-// Handle Connection Errors
+// Handle Connection Errors (TronLink specific)
 function handleConnectionError(error) {
     let errorMessage = error.message || 'Failed to connect wallet';
     
-    if (errorMessage.includes('not found') || errorMessage.includes('No TRON wallet')) {
-        errorMessage = '❌ No TRON wallet detected. Please use TrustWallet mobile app or install TronLink.';
-    } else if (errorMessage.includes('unlock') || errorMessage.includes('not ready')) {
-        errorMessage = '🔒 Please unlock your wallet and try again.';
+    if (errorMessage.includes('not detected') || errorMessage.includes('TronLink not detected')) {
+        errorMessage = '❌ TronLink not detected. Please install TronLink extension.';
+    } else if (errorMessage.includes('not ready') || errorMessage.includes('unlock')) {
+        errorMessage = '🔒 Please unlock TronLink and try again.';
     } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
-        errorMessage = '❌ Connection rejected. Please approve in your wallet.';
+        errorMessage = '❌ Connection rejected. Please approve in TronLink.';
     } else if (errorMessage.includes('address')) {
-        errorMessage = '❌ No wallet address found. Make sure your wallet is unlocked.';
+        errorMessage = '❌ No wallet address found. Make sure TronLink is unlocked.';
     }
     
     showToast(errorMessage, 'error');
