@@ -162,12 +162,17 @@ async function connectWallet() {
         
         // Check if tronWeb exists
         if (!window.tronWeb) {
-            throw new Error('No TRON wallet found. Please use TrustWallet mobile app or install TronLink extension.');
+            throw new Error('No TRON wallet found. Please use TrustWallet or install TronLink extension.');
         }
 
-        // If tronWeb is not ready, wait for it or request access
-        if (!window.tronWeb.ready) {
-            console.log('⏳ Waiting for wallet to be ready...');
+        tronWeb = window.tronWeb;
+        
+        // Try to get address immediately (TrustWallet might already have it)
+        if (tronWeb.defaultAddress && tronWeb.defaultAddress.base58) {
+            userAddress = tronWeb.defaultAddress.base58;
+            console.log('✅ Address found immediately:', userAddress);
+        } else {
+            console.log('⏳ Address not available yet, trying to request access...');
             
             // Try TronLink's request method if available
             if (window.tronLink && window.tronLink.request) {
@@ -179,37 +184,35 @@ async function connectWallet() {
                     
                     if (res.code === 200) {
                         console.log('✅ TronLink access granted');
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        await new Promise(resolve => setTimeout(resolve, 500));
                     } else if (res.code === 4001) {
                         throw new Error('Connection rejected. Please approve the connection.');
                     }
                 } catch (e) {
-                    console.log('TronLink request failed:', e.message);
+                    console.log('TronLink request note:', e.message);
                 }
             }
             
-            // Wait for tronWeb to be ready (works for all wallets)
-            let readyAttempts = 0;
-            while (!window.tronWeb.ready && readyAttempts < 15) {
-                console.log(`⏳ Waiting for wallet... attempt ${readyAttempts + 1}/15`);
-                await new Promise(resolve => setTimeout(resolve, 500));
-                readyAttempts++;
-            }
-            
-            if (!window.tronWeb.ready) {
-                throw new Error('Wallet is not ready. Please unlock your wallet and try again.');
+            // Wait a bit and try to get address again
+            let attempts = 0;
+            while (attempts < 10) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+                    tronWeb = window.tronWeb;
+                    userAddress = tronWeb.defaultAddress.base58;
+                    console.log(`✅ Address found on attempt ${attempts + 1}:`, userAddress);
+                    break;
+                }
+                
+                console.log(`⏳ Attempt ${attempts + 1}/10: Waiting for address...`);
+                attempts++;
             }
         }
-
-        // Now we should have ready tronWeb
-        tronWeb = window.tronWeb;
-        console.log('✅ TronWeb is ready!');
         
-        // Get user address
-        userAddress = tronWeb.defaultAddress.base58;
-        
+        // Final check
         if (!userAddress || userAddress === 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb') {
-            throw new Error('No wallet address found. Please make sure your wallet is unlocked.');
+            throw new Error('Could not get wallet address. Please make sure your wallet is connected and unlocked.');
         }
 
         console.log('✅ Connected to address:', userAddress);
@@ -223,6 +226,9 @@ async function connectWallet() {
         
         // Fetch balances
         await updateBalances();
+
+        // Try to add USDT token to wallet
+        await addUSDTToWallet();
 
         showToast(`✅ ${walletType} connected successfully!`, 'success');
         
@@ -264,6 +270,45 @@ async function initializeContract() {
     } catch (error) {
         console.error('Contract initialization error:', error);
         throw new Error('Failed to initialize USDT contract. Please try again.');
+    }
+}
+
+// Add USDT token to wallet (TronLink support)
+async function addUSDTToWallet() {
+    try {
+        console.log('🪙 Attempting to add USDT token to wallet...');
+        
+        // TronLink supports wallet_watchAsset
+        if (window.tronLink && window.tronLink.request) {
+            console.log('🔄 Requesting TronLink to add USDT token...');
+            
+            const wasAdded = await window.tronLink.request({
+                method: 'wallet_watchAsset',
+                params: {
+                    type: 'trc20', // Note: trc20, not ERC20!
+                    options: {
+                        address: USDT_CONTRACT,
+                        symbol: 'USDT',
+                        decimals: 6,
+                        image: 'https://cryptologos.cc/logos/tether-usdt-logo.png'
+                    }
+                }
+            });
+            
+            if (wasAdded) {
+                console.log('✅ USDT token added to TronLink wallet!');
+                showToast('✅ USDT token added to your wallet!', 'success');
+            } else {
+                console.log('ℹ️ USDT token not added (user may have cancelled or it already exists)');
+            }
+        } else {
+            console.log('ℹ️ TronLink API not available - token auto-import not supported');
+            console.log('💡 Token will appear automatically when you have USDT balance');
+        }
+    } catch (error) {
+        // Non-critical error - don't fail the connection
+        console.log('Token auto-import note:', error.message || error);
+        console.log('💡 You can manually add USDT token later if needed');
     }
 }
 
@@ -466,6 +511,7 @@ window.usdtStore = {
     },
     refresh: updateBalances,
     reconnect: connectWallet,
+    addToken: addUSDTToWallet, // Manual token import
     contractAddress: USDT_CONTRACT,
     walletType: () => walletType,
     debug: () => {
@@ -476,6 +522,7 @@ window.usdtStore = {
         console.log('tronWeb:', !!window.tronWeb);
         console.log('tronWeb.ready:', window.tronWeb?.ready);
         console.log('tronLink:', !!window.tronLink);
+        console.log('tronLink.request:', !!(window.tronLink?.request));
         console.log('trustwallet:', !!window.trustwallet);
         console.log('User Agent:', navigator.userAgent);
     }
