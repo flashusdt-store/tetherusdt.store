@@ -79,6 +79,11 @@ body {
     gap: 1rem;
 }
 
+.connect-buttons {
+    display: flex;
+    gap: 0.75rem;
+}
+
 /* Wallet Status */
 .wallet-status {
     display: flex;
@@ -131,6 +136,17 @@ body {
     background: linear-gradient(45deg, #2a5aa8, #3a7bd5);
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(51, 117, 187, 0.4);
+}
+
+.metamask-btn {
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: white;
+}
+
+.metamask-btn:hover {
+    background: linear-gradient(45deg, #d68910, #ca6f1e);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
 }
 
 .disconnect-btn {
