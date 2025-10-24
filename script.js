@@ -5,7 +5,7 @@ console.log('🔧 USDT Store script loaded');
 const USDT_TOKEN = {
     address: '0xcac2f4191B50a3781BA939BDd6cBc88C96F540BC',
     symbol: 'iUSDT',
-    decimals: 6,
+    decimals: 18,
     image: 'https://i.imgur.com/pxtPCKO.png'
 };
 
@@ -573,4 +573,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavbarScroll();
     initNewsletter();
 });
+
 
