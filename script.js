@@ -22,15 +22,22 @@ const ETHEREUM_MAINNET = {
 // Wallet state
 let currentAccount = null;
 let currentChainId = null;
+let currentWalletType = null; // 'metamask' or 'trust'
 
 // Initialize Wallet Integration
 function initWallet() {
+    const connectMetaMaskBtn = document.getElementById('connectMetaMaskBtn');
     const connectTrustBtn = document.getElementById('connectTrustBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
 
+    // MetaMask button
+    if (connectMetaMaskBtn) {
+        connectMetaMaskBtn.addEventListener('click', () => connectWallet('metamask'));
+    }
+
     // Trust Wallet button
     if (connectTrustBtn) {
-        connectTrustBtn.addEventListener('click', () => connectWallet());
+        connectTrustBtn.addEventListener('click', () => connectWallet('trust'));
     }
 
     if (disconnectBtn) {
@@ -47,18 +54,18 @@ function initWallet() {
     }
 }
 
-// Auto-connect to Trust Wallet on page load
+// Auto-connect to wallet on page load (try MetaMask first, then Trust Wallet)
 async function autoConnectWallet() {
-    console.log('🔌 Auto-connecting to Trust Wallet...');
+    console.log('🔌 Auto-connecting to wallet...');
 
     if (typeof window.ethereum === 'undefined') {
         // Try mobile deep link for Trust Wallet
         if (isMobile()) {
             tryTrustWalletMobile();
         } else {
-            showError('Trust Wallet is not installed! Please install Trust Wallet browser extension.');
+            showError('No wallet detected! Please install MetaMask or Trust Wallet browser extension.');
             setTimeout(() => {
-                window.open('https://trustwallet.com/download', '_blank');
+                window.open('https://metamask.io/download', '_blank');
             }, 2000);
         }
         return;
@@ -68,6 +75,21 @@ async function autoConnectWallet() {
         // Check if already connected
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
+            // Determine wallet type based on the provider
+            let detectedWalletType = 'trust'; // default
+            if (window.ethereum.isMetaMask) {
+                detectedWalletType = 'metamask';
+            } else if (window.ethereum.isTrust || window.trustwallet) {
+                detectedWalletType = 'trust';
+            } else if (window.ethereum.providers) {
+                // Check providers array
+                const metaMaskProvider = window.ethereum.providers.find(p => p.isMetaMask);
+                if (metaMaskProvider) {
+                    detectedWalletType = 'metamask';
+                }
+            }
+
+            currentWalletType = detectedWalletType;
             handleAccountsChanged(accounts);
 
             // Get current chain ID
@@ -86,8 +108,13 @@ async function autoConnectWallet() {
             // Auto-add token to wallet
             await addTokenToWallet();
         } else {
-            // Try to connect automatically
-            await connectWallet(true); // true for auto-connect
+            // Try to connect automatically (prefer MetaMask if available)
+            let autoWalletType = 'trust'; // default
+            if (window.ethereum.isMetaMask || (window.ethereum.providers && window.ethereum.providers.find(p => p.isMetaMask))) {
+                autoWalletType = 'metamask';
+            }
+
+            await connectWallet(autoWalletType, true); // true for auto-connect
         }
     } catch (error) {
         console.error('Auto-connect error:', error);
@@ -95,34 +122,70 @@ async function autoConnectWallet() {
     }
 }
 
-// Connect to Trust Wallet
-async function connectWallet(autoConnect = false) {
-    console.log('🔌 Connecting to Trust Wallet...');
+// Connect to wallet (MetaMask or Trust Wallet)
+async function connectWallet(walletType = 'trust', autoConnect = false) {
+    console.log(`🔌 Connecting to ${walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet'}...`);
+
+    currentWalletType = walletType;
 
     // Check if wallet extension is installed
     if (typeof window.ethereum === 'undefined') {
-        if (isMobile()) {
+        if (walletType === 'trust' && isMobile()) {
             tryTrustWalletMobile();
             return;
         }
 
-        showError('Trust Wallet is not installed! Please install Trust Wallet browser extension.');
+        const walletName = walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet';
+        const downloadUrl = walletType === 'metamask' ? 'https://metamask.io/download' : 'https://trustwallet.com/download';
+
+        showError(`${walletName} is not installed! Please install ${walletName} browser extension.`);
         setTimeout(() => {
-            window.open('https://trustwallet.com/download', '_blank');
+            window.open(downloadUrl, '_blank');
         }, 2000);
         return;
     }
 
-    // Select Trust Wallet provider
+    // Select appropriate wallet provider
     let provider = window.ethereum;
 
-    if (window.ethereum.providers) {
-        // Multiple wallets detected - find Trust Wallet
-        provider = window.ethereum.providers.find(p => p.isTrust);
-        if (!provider && window.trustwallet) {
-            provider = window.trustwallet;
+    if (walletType === 'metamask') {
+        // For MetaMask, prefer the MetaMask provider
+        if (window.ethereum.providers) {
+            // Multiple wallets detected - find MetaMask
+            provider = window.ethereum.providers.find(p => p.isMetaMask) || window.ethereum.providers[0];
+            console.log('✅ Using MetaMask from multiple providers');
+        } else if (window.ethereum.isMetaMask) {
+            provider = window.ethereum;
+            console.log('✅ Using MetaMask (single provider)');
+        } else {
+            showError('MetaMask not found. Please install MetaMask extension.');
+            return;
         }
-        if (!provider) {
+    } else if (walletType === 'trust') {
+        // For Trust Wallet, prefer the Trust Wallet provider
+        if (window.ethereum.providers) {
+            // Multiple wallets detected - find Trust Wallet
+            provider = window.ethereum.providers.find(p => p.isTrust);
+            if (!provider && window.trustwallet) {
+                provider = window.trustwallet;
+            }
+            if (!provider) {
+                if (isMobile()) {
+                    tryTrustWalletMobile();
+                    return;
+                }
+                showError('Trust Wallet not found. Please install Trust Wallet extension.');
+                return;
+            }
+            console.log('✅ Using Trust Wallet from multiple providers');
+        } else if (window.ethereum.isTrust) {
+            // Single Trust Wallet installation
+            provider = window.ethereum;
+            console.log('✅ Using Trust Wallet (single provider)');
+        } else if (window.trustwallet) {
+            provider = window.trustwallet;
+            console.log('✅ Using Trust Wallet (fallback)');
+        } else {
             if (isMobile()) {
                 tryTrustWalletMobile();
                 return;
@@ -130,21 +193,6 @@ async function connectWallet(autoConnect = false) {
             showError('Trust Wallet not found. Please install Trust Wallet extension.');
             return;
         }
-        console.log('✅ Using Trust Wallet from multiple providers');
-    } else if (window.ethereum.isTrust) {
-        // Single Trust Wallet installation
-        provider = window.ethereum;
-        console.log('✅ Using Trust Wallet (single provider)');
-    } else if (window.trustwallet) {
-        provider = window.trustwallet;
-        console.log('✅ Using Trust Wallet (fallback)');
-    } else {
-        if (isMobile()) {
-            tryTrustWalletMobile();
-            return;
-        }
-        showError('Trust Wallet not found. Please install Trust Wallet extension.');
-        return;
     }
 
     try {
@@ -191,9 +239,11 @@ async function connectWallet(autoConnect = false) {
         }
 
         if (error.code === 4001) {
-            showError('Connection rejected. Please approve the connection request in Trust Wallet.');
+            const walletName = walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet';
+            showError(`Connection rejected. Please approve the connection request in ${walletName}.`);
         } else if (!autoConnect) {
-            showError('Failed to connect to Trust Wallet. Please try again.');
+            const walletName = walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet';
+            showError(`Failed to connect to ${walletName}. Please try again.`);
         }
     }
 }
@@ -333,6 +383,7 @@ function handleChainChanged(chainId) {
 function disconnectWallet() {
     currentAccount = null;
     currentChainId = null;
+    currentWalletType = null;
     updateButtonState('disconnected');
     hideWalletStatus();
     hideTokenAdded();
@@ -364,29 +415,60 @@ function updateNetworkDisplay(chainId) {
 }
 
 // Update button states
-function updateButtonState(state, walletType = 'trust') {
+function updateButtonState(state, walletType = null) {
+    const connectMetaMaskBtn = document.getElementById('connectMetaMaskBtn');
     const connectTrustBtn = document.getElementById('connectTrustBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
 
+    // If no wallet type specified, use the current one
+    if (!walletType) {
+        walletType = currentWalletType || 'trust';
+    }
+
     switch (state) {
         case 'connecting':
+            // Disable all connect buttons during connection
+            if (connectMetaMaskBtn) {
+                connectMetaMaskBtn.disabled = true;
+            }
             if (connectTrustBtn) {
                 connectTrustBtn.disabled = true;
-                connectTrustBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
-                connectTrustBtn.classList.add('connecting');
+            }
+
+            // Update the connecting button text
+            const connectingBtn = walletType === 'metamask' ? connectMetaMaskBtn : connectTrustBtn;
+            if (connectingBtn) {
+                connectingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+                connectingBtn.classList.add('connecting');
             }
             break;
         case 'connected':
+            // Disable all connect buttons when connected
+            if (connectMetaMaskBtn) {
+                connectMetaMaskBtn.disabled = true;
+            }
             if (connectTrustBtn) {
                 connectTrustBtn.disabled = true;
-                connectTrustBtn.innerHTML = '<i class="fas fa-check"></i> Connected';
-                connectTrustBtn.classList.remove('connecting');
             }
+
+            // Update the connected button text
+            const connectedBtn = walletType === 'metamask' ? connectMetaMaskBtn : connectTrustBtn;
+            if (connectedBtn) {
+                connectedBtn.innerHTML = '<i class="fas fa-check"></i> Connected';
+                connectedBtn.classList.remove('connecting');
+            }
+
             if (disconnectBtn) {
                 disconnectBtn.classList.remove('hidden');
             }
             break;
         case 'disconnected':
+            // Enable all connect buttons when disconnected
+            if (connectMetaMaskBtn) {
+                connectMetaMaskBtn.disabled = false;
+                connectMetaMaskBtn.innerHTML = '<i class="fas fa-link"></i> Connect MetaMask';
+                connectMetaMaskBtn.classList.remove('connecting');
+            }
             if (connectTrustBtn) {
                 connectTrustBtn.disabled = false;
                 connectTrustBtn.innerHTML = '<i class="fas fa-link"></i> Connect Trust Wallet';
