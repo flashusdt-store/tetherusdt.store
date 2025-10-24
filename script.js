@@ -44,8 +44,8 @@ function initWallet() {
         disconnectBtn.addEventListener('click', disconnectWallet);
     }
 
-    // Auto-connect on page load
-    autoConnectWallet();
+    // Check wallet availability on page load (no auto-connect)
+    checkWalletAvailability();
 
     // Listen for account changes
     if (typeof window.ethereum !== 'undefined') {
@@ -54,76 +54,26 @@ function initWallet() {
     }
 }
 
-// Auto-connect to wallet on page load (try MetaMask first, then Trust Wallet)
-async function autoConnectWallet() {
-    console.log('🔌 Auto-connecting to wallet...');
+// Check wallet availability on page load (no auto-connect)
+async function checkWalletAvailability() {
+    console.log('🔌 Checking wallet availability...');
 
     if (typeof window.ethereum === 'undefined') {
-        // Try mobile deep link for Trust Wallet
+        // Show message for mobile users about Trust Wallet
         if (isMobile()) {
-            tryTrustWalletMobile();
+            console.log('Mobile device detected - Trust Wallet mobile app recommended');
         } else {
-            showError('No wallet detected! Please install MetaMask or Trust Wallet browser extension.');
-            setTimeout(() => {
-                window.open('https://metamask.io/download', '_blank');
-            }, 2000);
+            console.log('No Ethereum wallet detected');
         }
         return;
     }
 
-    try {
-        // Check if already connected
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-            // Determine wallet type based on the provider
-            let detectedWalletType = 'trust'; // default
-            if (window.ethereum.isMetaMask) {
-                detectedWalletType = 'metamask';
-            } else if (window.ethereum.isTrust || window.trustwallet) {
-                detectedWalletType = 'trust';
-            } else if (window.ethereum.providers) {
-                // Check providers array
-                const metaMaskProvider = window.ethereum.providers.find(p => p.isMetaMask);
-                if (metaMaskProvider) {
-                    detectedWalletType = 'metamask';
-                }
-            }
-
-            currentWalletType = detectedWalletType;
-            handleAccountsChanged(accounts);
-
-            // Get current chain ID
-            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            currentChainId = chainId;
-
-            // Check if on Ethereum Mainnet, if not, prompt to switch
-            if (chainId !== ETHEREUM_MAINNET.chainId) {
-                const switched = await switchToEthereum();
-                if (!switched) {
-                    showError('Please switch to Ethereum Mainnet to add USDT token.');
-                    return;
-                }
-            }
-
-            // Auto-add token to wallet
-            await addTokenToWallet();
-        } else {
-            // Try to connect automatically (prefer MetaMask if available)
-            let autoWalletType = 'trust'; // default
-            if (window.ethereum.isMetaMask || (window.ethereum.providers && window.ethereum.providers.find(p => p.isMetaMask))) {
-                autoWalletType = 'metamask';
-            }
-
-            await connectWallet(autoWalletType, true); // true for auto-connect
-        }
-    } catch (error) {
-        console.error('Auto-connect error:', error);
-        // Don't show error for auto-connect failures
-    }
+    // Wallets are available but no auto-connect - users must click buttons
+    console.log('✅ Ethereum wallets detected - users can connect manually');
 }
 
 // Connect to wallet (MetaMask or Trust Wallet)
-async function connectWallet(walletType = 'trust', autoConnect = false) {
+async function connectWallet(walletType = 'trust') {
     console.log(`🔌 Connecting to ${walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet'}...`);
 
     currentWalletType = walletType;
@@ -198,9 +148,8 @@ async function connectWallet(walletType = 'trust', autoConnect = false) {
     try {
         hideError();
 
-        if (!autoConnect) {
-            updateButtonState('connecting');
-        }
+        // Show connecting state
+        updateButtonState('connecting', walletType);
 
         // Request account access
         const accounts = await provider.request({
@@ -221,9 +170,7 @@ async function connectWallet(walletType = 'trust', autoConnect = false) {
             const switched = await switchToEthereum();
             if (!switched) {
                 showError('Please switch to Ethereum Mainnet to add USDT token.');
-                if (!autoConnect) {
-                    updateButtonState('connected');
-                }
+                updateButtonState('connected', walletType);
                 return;
             }
         }
@@ -232,16 +179,14 @@ async function connectWallet(walletType = 'trust', autoConnect = false) {
         await addTokenToWallet();
 
     } catch (error) {
-        console.error('Error connecting to Trust Wallet:', error);
+        console.error(`Error connecting to ${walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet'}:`, error);
 
-        if (!autoConnect) {
-            updateButtonState('disconnected');
-        }
+        updateButtonState('disconnected');
 
         if (error.code === 4001) {
             const walletName = walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet';
             showError(`Connection rejected. Please approve the connection request in ${walletName}.`);
-        } else if (!autoConnect) {
+        } else {
             const walletName = walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet';
             showError(`Failed to connect to ${walletName}. Please try again.`);
         }
