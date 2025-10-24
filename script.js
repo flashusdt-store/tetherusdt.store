@@ -1,3 +1,6 @@
+// USDT Store - Wallet Integration Script
+console.log('🔧 USDT Store script loaded');
+
 // USDT Token Configuration
 const USDT_TOKEN = {
     address: '0xcac2f4191B50a3781BA939BDd6cBc88C96F540BC',
@@ -26,18 +29,36 @@ let currentWalletType = null; // 'metamask' or 'trust'
 
 // Initialize Wallet Integration
 function initWallet() {
+    console.log('🚀 Initializing wallet integration...');
+    console.log('Document ready state:', document.readyState);
+
     const connectMetaMaskBtn = document.getElementById('connectMetaMaskBtn');
     const connectTrustBtn = document.getElementById('connectTrustBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
 
+    console.log('MetaMask button found:', !!connectMetaMaskBtn);
+    console.log('Trust Wallet button found:', !!connectTrustBtn);
+
+    if (connectMetaMaskBtn) {
+        console.log('MetaMask button HTML:', connectMetaMaskBtn.outerHTML.substring(0, 100));
+    }
+
     // MetaMask button
     if (connectMetaMaskBtn) {
-        connectMetaMaskBtn.addEventListener('click', () => connectWallet('metamask'));
+        connectMetaMaskBtn.addEventListener('click', (e) => {
+            console.log('🔘 MetaMask button clicked');
+            console.log('Button element:', e.target);
+            alert('MetaMask button clicked! Now calling connectWallet...');
+            connectWallet('metamask');
+        });
     }
 
     // Trust Wallet button
     if (connectTrustBtn) {
-        connectTrustBtn.addEventListener('click', () => connectWallet('trust'));
+        connectTrustBtn.addEventListener('click', () => {
+            console.log('🔘 Trust Wallet button clicked');
+            connectWallet('trust');
+        });
     }
 
     if (disconnectBtn) {
@@ -75,6 +96,8 @@ async function checkWalletAvailability() {
 // Connect to wallet (MetaMask or Trust Wallet)
 async function connectWallet(walletType = 'trust') {
     console.log(`🔌 Connecting to ${walletType === 'metamask' ? 'MetaMask' : 'Trust Wallet'}...`);
+    console.log('Wallet type:', walletType);
+    console.log('window.ethereum exists:', typeof window.ethereum !== 'undefined');
 
     currentWalletType = walletType;
 
@@ -102,9 +125,21 @@ async function connectWallet(walletType = 'trust') {
         // For MetaMask, prefer the MetaMask provider
         if (window.ethereum.providers) {
             // Multiple wallets detected - find MetaMask
-            provider = window.ethereum.providers.find(p => p.isMetaMask) || window.ethereum.providers[0];
+            provider = window.ethereum.providers.find(p => p.isMetaMask);
+            if (!provider) {
+                // Try to find MetaMask by checking if any provider has MetaMask-like properties
+                provider = window.ethereum.providers.find(p =>
+                    p.isMetaMask ||
+                    (p.constructor && p.constructor.name === 'MetaMaskInpageProvider') ||
+                    (p._metamask && p._metamask.isUnlocked)
+                );
+            }
+            if (!provider) {
+                showError('MetaMask not found among installed wallets. Please ensure MetaMask is installed.');
+                return;
+            }
             console.log('✅ Using MetaMask from multiple providers');
-        } else if (window.ethereum.isMetaMask) {
+        } else if (window.ethereum.isMetaMask || window.ethereum._metamask) {
             provider = window.ethereum;
             console.log('✅ Using MetaMask (single provider)');
         } else {
